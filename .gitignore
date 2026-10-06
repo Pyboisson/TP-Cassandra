@@ -3,3 +3,9 @@ venv/
 __pycache__/
 *.pyc
 .DS_Store
+
+# Dossiers/fichiers à ignorer supplémentaires
+.cache/
+*.tmp
+~$*
+TP-OverFast/overfast-api/

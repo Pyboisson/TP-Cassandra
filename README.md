@@ -11,10 +11,10 @@ Sujet
 
 API
 - API locale (si lancée) via OVERFAST_BASE_URL, ou API publique de secours.
-- Le script d’ingestion (hors périmètre de ce README) écrit dans la table `overwatch.heroes`.
+- Le script d’ingestion (hors périmètre de ce README) écrit dans la table `overwatch.heroes` et maintient les tables de lecture (fan-out) à l’écriture.
 
 Données
-- Une ligne par héros, incluant les attributs de base (name, role, HP, etc.) et du JSON brut pour l’extensibilité.
+- Une ligne par héros dans la table source minimaliste (10 colonnes utiles au TP): `hero_key, name, role, subrole, location, age, health, shields, armor, total_hp`.
 
 Modèle Cassandra (résumé)
 - Keyspace: `overwatch`

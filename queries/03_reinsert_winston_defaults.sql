@@ -1,30 +1,21 @@
 -- Réinsérer Winston avec ses valeurs de base (retour aux données par défaut)
 -- Si la ligne existe déjà, vous pouvez au préalable exécuter DELETE (voir 02_delete_winston.sql)
 
+-- Nouveau modèle KISS (10 colonnes) — cette requête ne met à jour que la table source.
+-- Attention: dans le modèle orienté requêtes, les tables de lecture (heroes_by_*)
+-- sont normalement maintenues à l’ingestion (fan-out) via le script Python.
 INSERT INTO overwatch.heroes (
-  hero_key, name, description, portrait, role, subrole, location, age, birthday,
-  health, armor, shields, total_hp, abilities, backgrounds, perks_json, story, raw_json, last_update
+  hero_key, name, role, subrole, location, age,
+  health, shields, armor, total_hp
 ) VALUES (
   'winston',
   'Winston',
-  'A super-intelligent, genetically engineered gorilla, Winston is a brilliant scientist and a champion for humanity’s potential.',
-  'https://d15f34w2p8l1cc.cloudfront.net/overwatch/46a10db3aa908c590ddc4e7606376a88143d1f1306ecfbea043263040f9529a5.png',
   'tank',
   'initiator',
   'Horizon Lunar Colony (formerly), Watchpoint: Gibraltar',
-  '31',
-  'Jun 6',
+  31,
   425,
-  200,
   0,
-  625,
-  [ 'Tesla Cannon', 'Jump Pack', 'Barrier Projector', 'Primal Rage' ],
-  [
-    'https://blz-contentstack-images.akamaized.net/v3/assets/blt2477dcaf4ebd440c/blt393ab319cd413b01/638810d775e4d50e88ea3b30/winston-00.jpg',
-    'https://blz-contentstack-images.akamaized.net/v3/assets/blt2477dcaf4ebd440c/blt8b22e773484e0ecf/638810d73ae72d1147f2401a/winston-01.jpg'
-  ],
-  '{}',
-  null,
-  null,
-  toTimestamp(now())
+  200,
+  625
 );

@@ -15,3 +15,10 @@ WHERE hero_key = 'test_hero';
 
 -- DELETE: supprimer un héros par clé
 DELETE FROM overwatch.heroes WHERE hero_key = 'test_hero';
+
+-- NOTE IMPORTANTE
+-- Ces opérations modifient uniquement la table source overwatch.heroes.
+-- Dans ce TP, les tables de lecture (heroes_by_role, heroes_by_hp_bucket, ...)
+-- sont alimentées/maintenues à l’écriture par le script d’ingestion (writes en éventail).
+-- Si vous insérez/éditez/supprimez directement dans overwatch.heroes,
+-- pensez que les tables de lecture ne seront pas mises à jour automatiquement par ces scripts CQL.

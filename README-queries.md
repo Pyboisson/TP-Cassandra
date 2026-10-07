@@ -1,15 +1,17 @@
 # Requêtes et scripts OverFast x Cassandra
 
 Ce dossier contient:
-- Des requêtes CQL illustrant des besoins métier courants sur la table unique `overwatch.heroes`.
+- Des requêtes CQL illustrant des besoins métier courants via des tables orientées requêtes (sans ALLOW FILTERING).
 - Des scripts CQL utilitaires (mise à jour, suppression, réinsertion) pour la démonstration.
 
 Modèle (rappel):
-- Table: `overwatch.heroes`
-- Clé primaire: `hero_key` (clé de partition)
-- Colonnes notables: `name`, `role`, `total_hp`, `abilities` (list<text>), `backgrounds` (list<text>), etc.
-
-Note: Le modèle est centré sur la lecture par identifiant. Les requêtes analytiques ou par attribut secondaire (role, HP, etc.) nécessitent `ALLOW FILTERING` et ne sont pas optimales à grande échelle. Pour un usage production, prévoir des tables de lecture dédiées (ex: `heroes_by_role`) ou du matériel dérivé.
+- Table source: `overwatch.heroes` (clé primaire: `hero_key`)
+- Tables de lecture dédiées:
+  - `overwatch.heroes_by_role ((role), hero_key)`
+  - `overwatch.heroes_by_hp_bucket ((hp_bucket), total_hp, hero_key)`
+  - `overwatch.heroes_by_armor_bucket ((armor_bucket), armor, hero_key)`
+  - `overwatch.heroes_by_location ((location), hero_key)`
+  - `overwatch.heroes_by_age_bucket ((age_bucket), age, hero_key)`
 
 ---
 
@@ -22,9 +24,9 @@ Fichier: `queries/REQ-01_tank_heroes.sql`
 
 Requête CQL:
 ```sql
-SELECT hero_key, name, role
-FROM overwatch.heroes
-WHERE role = 'tank' ALLOW FILTERING;
+SELECT hero_key, name, 'tank' AS role
+FROM overwatch.heroes_by_role
+WHERE role = 'tank';
 ```
 
 Clé de partition utilisée:
@@ -45,8 +47,8 @@ Fichier: `queries/REQ-02_high_hp_heroes.sql`
 Requête CQL:
 ```sql
 SELECT hero_key, name, role, total_hp
-FROM overwatch.heroes
-WHERE total_hp >= 600 ALLOW FILTERING;
+FROM overwatch.heroes_by_hp_bucket
+WHERE hp_bucket = 'all' AND total_hp >= 600;
 ```
 
 Clé de partition utilisée:
@@ -67,8 +69,8 @@ Fichier: `queries/REQ-03_heroes_with_armor.sql`
 Requête CQL:
 ```sql
 SELECT hero_key, name, role, armor
-FROM overwatch.heroes
-WHERE armor > 0 ALLOW FILTERING;
+FROM overwatch.heroes_by_armor_bucket
+WHERE armor_bucket = 'all' AND armor > 0;
 ```
 
 Clé de partition utilisée:
@@ -86,8 +88,8 @@ Fichier: `queries/REQ-04_location_equals_france.sql`
 Requête CQL:
 ```sql
 SELECT hero_key, name, role, location
-FROM overwatch.heroes
-WHERE location = 'France' ALLOW FILTERING;
+FROM overwatch.heroes_by_location
+WHERE location = 'France';
 ```
 
 Clé de partition utilisée:
@@ -105,8 +107,8 @@ Fichier: `queries/REQ-05_age_below_18.sql`
 Requête CQL:
 ```sql
 SELECT hero_key, name, role, age
-FROM overwatch.heroes
-WHERE age < 18 ALLOW FILTERING;
+FROM overwatch.heroes_by_age_bucket
+WHERE age_bucket = 'all' AND age < 18;
 ```
 
 Clé de partition utilisée:
@@ -141,7 +143,6 @@ Clé de partition utilisée:
 
 ---
 
-## Conseils d’optimisation (hors périmètre « une seule table »)
-- Créer des tables de lecture par attribut d’accès: `heroes_by_role (role, hero_key, name, ...)`, `tanks_by_hp (role, total_hp, hero_key, ...)`.
-- Maintenir ces vues via l’ingestion applicative (writes en éventail) ou un pipeline ETL.
-- Limiter `ALLOW FILTERING` aux démos/faible volumétrie.
+## Notes
+- Les tables de lecture sont alimentées automatiquement par le script `script/get_overwatch.py` lors de l’ingestion (writes en éventail).
+- Limiter `ALLOW FILTERING` aux démos.faible volumétrie. Ici, il n’est plus utilisé pour les 5 requêtes métier.

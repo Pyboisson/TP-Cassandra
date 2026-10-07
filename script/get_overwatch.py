@@ -84,6 +84,85 @@ def ensure_schema(session) -> None:
         )
         """
     )
+    # Tables orientées requêtes métier (lecture) — sans ALLOW FILTERING
+    # 1) Par rôle
+    session.execute(
+        """
+        CREATE TABLE IF NOT EXISTS heroes_by_role (
+            role text,
+            hero_key text,
+            name text,
+            total_hp int,
+            armor int,
+            location text,
+            age int,
+            PRIMARY KEY ((role), hero_key)
+        )
+        """
+    )
+    # 2) Par HP (bucket unique 'all' + plage sur total_hp)
+    session.execute(
+        """
+        CREATE TABLE IF NOT EXISTS heroes_by_hp_bucket (
+            hp_bucket text,
+            total_hp int,
+            hero_key text,
+            name text,
+            role text,
+            armor int,
+            location text,
+            age int,
+            PRIMARY KEY ((hp_bucket), total_hp, hero_key)
+        ) WITH CLUSTERING ORDER BY (total_hp DESC, hero_key ASC)
+        """
+    )
+    # 3) Par armor (bucket unique 'all' + plage sur armor)
+    session.execute(
+        """
+        CREATE TABLE IF NOT EXISTS heroes_by_armor_bucket (
+            armor_bucket text,
+            armor int,
+            hero_key text,
+            name text,
+            role text,
+            total_hp int,
+            location text,
+            age int,
+            PRIMARY KEY ((armor_bucket), armor, hero_key)
+        ) WITH CLUSTERING ORDER BY (armor DESC, hero_key ASC)
+        """
+    )
+    # 4) Par localisation
+    session.execute(
+        """
+        CREATE TABLE IF NOT EXISTS heroes_by_location (
+            location text,
+            hero_key text,
+            name text,
+            role text,
+            total_hp int,
+            armor int,
+            age int,
+            PRIMARY KEY ((location), hero_key)
+        )
+        """
+    )
+    # 5) Par âge (bucket unique 'all' + plage sur age)
+    session.execute(
+        """
+        CREATE TABLE IF NOT EXISTS heroes_by_age_bucket (
+            age_bucket text,
+            age int,
+            hero_key text,
+            name text,
+            role text,
+            total_hp int,
+            armor int,
+            location text,
+            PRIMARY KEY ((age_bucket), age, hero_key)
+        ) WITH CLUSTERING ORDER BY (age ASC, hero_key ASC)
+        """
+    )
 
 
 def _to_int(x: Any) -> Optional[int]:
@@ -192,6 +271,37 @@ def main() -> int:
             ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         )
         prepared = session.prepare(insert_cql)
+        # Prepared statements pour les tables de lecture
+        p_ins_role = session.prepare(
+            """
+            INSERT INTO heroes_by_role (role, hero_key, name, total_hp, armor, location, age)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """
+        )
+        p_ins_hp = session.prepare(
+            """
+            INSERT INTO heroes_by_hp_bucket (hp_bucket, total_hp, hero_key, name, role, armor, location, age)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """
+        )
+        p_ins_armor = session.prepare(
+            """
+            INSERT INTO heroes_by_armor_bucket (armor_bucket, armor, hero_key, name, role, total_hp, location, age)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """
+        )
+        p_ins_loc = session.prepare(
+            """
+            INSERT INTO heroes_by_location (location, hero_key, name, role, total_hp, armor, age)
+            VALUES (?, ?, ?, ?, ?, ?, ?)
+            """
+        )
+        p_ins_age = session.prepare(
+            """
+            INSERT INTO heroes_by_age_bucket (age_bucket, age, hero_key, name, role, total_hp, armor, location)
+            VALUES (?, ?, ?, ?, ?, ?, ?, ?)
+            """
+        )
 
         inserted = 0
         errors = 0
@@ -228,6 +338,40 @@ def main() -> int:
                     row["last_update"],
                 )
                 session.execute(prepared, params)
+                # Alimentation des tables de lecture
+                role = row.get("role")
+                hero_key = row.get("hero_key")
+                name = row.get("name")
+                location = row.get("location")
+                total_hp = _to_int(row.get("total_hp"))
+                armor = _to_int(row.get("armor"))
+                age_int = _to_int(row.get("age"))
+
+                # 1) Par rôle (role, hero_key)
+                if role and hero_key:
+                    session.execute(p_ins_role, (
+                        role, hero_key, name, total_hp, armor, location, age_int
+                    ))
+                # 2) Par HP bucket
+                if total_hp is not None and hero_key:
+                    session.execute(p_ins_hp, (
+                        'all', total_hp, hero_key, name, role, armor, location, age_int
+                    ))
+                # 3) Par armor bucket
+                if armor is not None and hero_key:
+                    session.execute(p_ins_armor, (
+                        'all', armor, hero_key, name, role, total_hp, location, age_int
+                    ))
+                # 4) Par localisation
+                if location and hero_key:
+                    session.execute(p_ins_loc, (
+                        location, hero_key, name, role, total_hp, armor, age_int
+                    ))
+                # 5) Par âge bucket
+                if age_int is not None and hero_key:
+                    session.execute(p_ins_age, (
+                        'all', age_int, hero_key, name, role, total_hp, armor, location
+                    ))
                 inserted += 1
                 print(f"Inséré: {key} - {row['name']}")
             except Exception as e:

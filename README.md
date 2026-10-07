@@ -18,29 +18,44 @@ Données
 
 Modèle Cassandra (résumé)
 - Keyspace: `overwatch`
-- Table: `heroes (hero_key text PRIMARY KEY, name text, description text, portrait text, role text, subrole text, location text, age int, health int, armor int, shields int, total_hp int, abilities list<text>, backgrounds list<text>, perks_json text, story text, raw_json text, last_update timestamp)`
-- Partitionnement: par `hero_key` (lecture/écriture par identifiant efficaces)
+- Table source: `heroes (hero_key text PRIMARY KEY, name text, description text, portrait text, role text, subrole text, location text, age text, birthday text, health int, armor int, shields int, total_hp int, abilities list<text>, backgrounds list<text>, perks_json text, story text, raw_json text, last_update timestamp)`
+- Tables orientées requêtes (lectures efficaces sans ALLOW FILTERING):
+  - `heroes_by_role ((role), hero_key)`
+  - `heroes_by_hp_bucket ((hp_bucket), total_hp, hero_key)`
+  - `heroes_by_armor_bucket ((armor_bucket), armor, hero_key)`
+  - `heroes_by_location ((location), hero_key)`
+  - `heroes_by_age_bucket ((age_bucket), age, hero_key)`
 
-Principales requêtes métier (extraits)
+Principales requêtes métier (extraits, sans ALLOW FILTERING)
 - Tous les tanks:
   ```sql
-  SELECT hero_key, name, role FROM overwatch.heroes WHERE role = 'tank' ALLOW FILTERING;
+  SELECT hero_key, name, 'tank' AS role
+  FROM overwatch.heroes_by_role
+  WHERE role = 'tank';
   ```
 - Héros total_hp >= 600:
   ```sql
-  SELECT hero_key, name, role, total_hp FROM overwatch.heroes WHERE total_hp >= 600 ALLOW FILTERING;
+  SELECT hero_key, name, role, total_hp
+  FROM overwatch.heroes_by_hp_bucket
+  WHERE hp_bucket = 'all' AND total_hp >= 600;
   ```
 - Héros avec armure > 0:
   ```sql
-  SELECT hero_key, name, role, armor FROM overwatch.heroes WHERE armor > 0 ALLOW FILTERING;
+  SELECT hero_key, name, role, armor
+  FROM overwatch.heroes_by_armor_bucket
+  WHERE armor_bucket = 'all' AND armor > 0;
   ```
 - Location = 'France':
   ```sql
-  SELECT hero_key, name, role, location FROM overwatch.heroes WHERE location = 'France' ALLOW FILTERING;
+  SELECT hero_key, name, role, location
+  FROM overwatch.heroes_by_location
+  WHERE location = 'France';
   ```
 - Âge < 18:
   ```sql
-  SELECT hero_key, name, role, age FROM overwatch.heroes WHERE age < 18 ALLOW FILTERING;
+  SELECT hero_key, name, role, age
+  FROM overwatch.heroes_by_age_bucket
+  WHERE age_bucket = 'all' AND age < 18;
   ```
 
 Organisation attendue

@@ -5,7 +5,7 @@ Ce dossier contient:
 - Des scripts CQL utilitaires (mise à jour, suppression, réinsertion) pour la démonstration.
 
 Modèle (rappel):
-- Table source: `overwatch.heroes` (clé primaire: `hero_key`)
+- Table source: `overwatch.heroes` (clé primaire: `hero_key`) — colonnes minimales: `name`, `role`, `subrole`, `location`, `age`, `health`, `shields`, `armor`, `total_hp`.
 - Tables de lecture dédiées:
   - `overwatch.heroes_by_role ((role), hero_key)`
   - `overwatch.heroes_by_hp_bucket ((hp_bucket), total_hp, hero_key)`

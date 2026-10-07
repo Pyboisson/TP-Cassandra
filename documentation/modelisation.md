@@ -4,9 +4,9 @@ Ce document présente la (dé)normalisation choisie pour le TP, les tables, les 
 
 ## Tables et clés
 
-Table source: `overwatch.heroes`
+Table source (KISS): `overwatch.heroes`
 - Clé primaire: `hero_key` (text) — clé de partition unique
-- Colonnes principales: `name` (text), `description` (text), `portrait` (text), `role` (text), `subrole` (text), `location` (text), `age` (text), `birthday` (text), `health` (int), `armor` (int), `shields` (int), `total_hp` (int), `abilities` (list<text>), `backgrounds` (list<text>), `perks_json` (text), `story` (text), `raw_json` (text), `last_update` (timestamp)
+- Colonnes: `name` (text), `role` (text), `subrole` (text), `location` (text), `age` (int), `health` (int), `shields` (int), `armor` (int), `total_hp` (int)
 
 Tables de lecture dédiées (orientées requêtes)
 - `overwatch.heroes_by_role ((role), hero_key)` — lecture par rôle
@@ -19,6 +19,7 @@ Tables de lecture dédiées (orientées requêtes)
 - Modèle centré sur les requêtes: chaque besoin métier dispose d’une table dédiée pour éviter `ALLOW FILTERING`.
 - Writes en éventail: à l’ingestion, les données d’un héros sont insérées dans la table source et dans les tables de lecture nécessaires.
 - Colonnes numériques pour le range: les tables par plage utilisent la colonne de clustering adéquate (ex: `total_hp`, `armor`, `age`).
+- Schéma minimaliste: on ne conserve que 10 colonnes utiles au TP pour simplifier la maintenance et la lisibilité.
 
 ## 5 besoins métier et leurs requêtes
 

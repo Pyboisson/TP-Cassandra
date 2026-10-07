@@ -18,7 +18,8 @@ Données
 
 Modèle Cassandra (résumé)
 - Keyspace: `overwatch`
-- Table source: `heroes (hero_key text PRIMARY KEY, name text, description text, portrait text, role text, subrole text, location text, age text, birthday text, health int, armor int, shields int, total_hp int, abilities list<text>, backgrounds list<text>, perks_json text, story text, raw_json text, last_update timestamp)`
+- Table source minimaliste (KISS):
+  - `heroes (hero_key text PRIMARY KEY, name text, role text, subrole text, location text, age int, health int, shields int, armor int, total_hp int)`
 - Tables orientées requêtes (lectures efficaces sans ALLOW FILTERING):
   - `heroes_by_role ((role), hero_key)`
   - `heroes_by_hp_bucket ((hp_bucket), total_hp, hero_key)`

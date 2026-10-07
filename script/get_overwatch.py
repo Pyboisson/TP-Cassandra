@@ -1,8 +1,34 @@
 #!/usr/bin/env python3
+"""
+Ingestion OverFast -> Cassandra (KISS)
+
+Objectif: ne stocker que les colonnes utiles suivantes dans overwatch.heroes:
+- hero_key (PK)
+- name
+- age (int)
+- location
+- role
+- subrole
+- total_hp (int)
+- health (int)
+- shields (int)
+- armor (int)
+
+Et alimenter des tables de lecture orientées requêtes (sans ALLOW FILTERING):
+- heroes_by_role ((role), hero_key)
+- heroes_by_hp_bucket ((hp_bucket), total_hp, hero_key)
+- heroes_by_armor_bucket ((armor_bucket), armor, hero_key)
+- heroes_by_location ((location), hero_key)
+- heroes_by_age_bucket ((age_bucket), age, hero_key)
+
+Configuration par variables d'environnement (valeurs par défaut adaptées au TP):
+- OVERFAST_BASE_URL, OVERFAST_PUBLIC_BASE_URL, OVERFAST_FALLBACK_PUBLIC
+- CASSANDRA_HOSTS, CASSANDRA_KEYSPACE, CASSANDRA_TABLE
+- OVERFAST_LIMIT (limiter le nombre de héros)
+"""
+
 import os
 import sys
-import json
-from datetime import datetime
 from typing import Any, Dict, List, Optional
 
 import requests
@@ -22,6 +48,7 @@ HERO_LIMIT = int(HERO_LIMIT_ENV) if HERO_LIMIT_ENV and HERO_LIMIT_ENV.isdigit() 
 
 
 def http_get_json(path: str, base_url: Optional[str] = None) -> Any:
+    """GET JSON helper on given base URL."""
     base = (base_url or API_BASE_URL).rstrip("/")
     url = f"{base}{path}"
     resp = requests.get(url, timeout=HTTP_TIMEOUT)
@@ -30,28 +57,28 @@ def http_get_json(path: str, base_url: Optional[str] = None) -> Any:
 
 
 def fetch_heroes_list(base_url: Optional[str] = None) -> List[Dict[str, Any]]:
-    # /heroes returns a list of HeroShort items
+    """Retourne la liste courte des héros pour obtenir leurs clés."""
     data = http_get_json("/heroes", base_url=base_url)
     if isinstance(data, dict) and "results" in data:
         return data.get("results", [])
     if isinstance(data, list):
         return data
-    # Fallback: try to read HeroKey enum from openapi.json
+    # Fallback: extraire la liste des clés depuis le schéma OpenAPI
     spec = http_get_json("/openapi.json", base_url=base_url)
     try:
         keys = spec["components"]["schemas"]["HeroKey"]["enum"]
         return [{"key": k} for k in keys]
     except Exception:
-        raise ValueError("Unexpected /heroes response format and couldn't parse HeroKey enum from openapi.json")
+        raise ValueError("Unexpected /heroes response and couldn't parse HeroKey enum from openapi.json")
 
 
 def fetch_hero_detail(hero_key: str, base_url: Optional[str] = None) -> Dict[str, Any]:
-    # /heroes/{hero_key} returns a Hero object (detailed)
+    """Retourne le détail d'un héros donné (dict brut de l'API)."""
     return http_get_json(f"/heroes/{hero_key}", base_url=base_url)
 
 
 def ensure_schema(session) -> None:
-    # Create keyspace/table if not exists (idempotent)
+    """Crée le keyspace et les tables si nécessaire (idempotent)."""
     session.execute(
         f"""
         CREATE KEYSPACE IF NOT EXISTS {KEYSPACE}
@@ -59,28 +86,20 @@ def ensure_schema(session) -> None:
         """
     )
     session.set_keyspace(KEYSPACE)
+    # Table source minimaliste (10 colonnes utiles au TP)
     session.execute(
         f"""
         CREATE TABLE IF NOT EXISTS {TABLE} (
             hero_key text PRIMARY KEY,
             name text,
-            description text,
-            portrait text,
             role text,
             subrole text,
             location text,
-            age text,
-            birthday text,
+            age int,
             health int,
-            armor int,
             shields int,
-            total_hp int,
-            abilities list<text>,
-            backgrounds list<text>,
-            perks_json text,
-            story text,
-            raw_json text,
-            last_update timestamp
+            armor int,
+            total_hp int
         )
         """
     )
@@ -166,16 +185,44 @@ def ensure_schema(session) -> None:
 
 
 def _to_int(x: Any) -> Optional[int]:
+    """Convertit en int si possible, sinon None."""
     try:
         return int(x) if x is not None else None
     except Exception:
         return None
-
-
 def map_hero_row(hero_detail: Dict[str, Any], hero_key: str) -> Dict[str, Any]:
-    def _t(x: Any) -> Optional[str]:
-        return None if x is None else str(x)
+    """Mappe le JSON du héros vers les 10 colonnes de la table source."""
+    # Champs simples
+    name = hero_detail.get("name") or hero_detail.get("displayName")
+    role = hero_detail.get("role")
+    subrole = hero_detail.get("subrole")
+    location = hero_detail.get("location")
+    age_int = _to_int(hero_detail.get("age") or hero_detail.get("age_years"))
 
+    # Points de vie (sous-structure)
+    hit = hero_detail.get("hitpoints") or {}
+    health = _to_int(hit.get("health"))
+    armor = _to_int(hit.get("armor"))
+    shields = _to_int(hit.get("shields"))
+    total_from_api = _to_int(hit.get("total"))
+    if total_from_api is not None:
+        total_hp = total_from_api
+    else:
+        parts = [v for v in (health, armor, shields) if v is not None]
+        total_hp = sum(parts) if parts else None
+
+    return {
+        "hero_key": hero_key,
+        "name": name,
+        "role": role,
+        "subrole": subrole,
+        "location": location,
+        "age": age_int,
+        "health": health,
+        "shields": shields,
+        "armor": armor,
+        "total_hp": total_hp,
+    }
     hit = hero_detail.get("hitpoints") or {}
     # Extract abilities names if present
     abilities: List[str] = []
@@ -263,12 +310,11 @@ def main() -> int:
     session = cluster.connect()
     try:
         ensure_schema(session)
+        # Insert minimaliste dans la table source (10 colonnes)
         insert_cql = (
             f"INSERT INTO {TABLE} ("
-            "hero_key, name, description, portrait, role, subrole, "
-            "location, age, birthday, health, armor, shields, total_hp, "
-            "abilities, backgrounds, perks_json, story, raw_json, last_update"
-            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
+            "hero_key, name, role, subrole, location, age, health, shields, armor, total_hp"
+            ") VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)"
         )
         prepared = session.prepare(insert_cql)
         # Prepared statements pour les tables de lecture
@@ -319,23 +365,14 @@ def main() -> int:
                 params = (
                     row["hero_key"],
                     row["name"],
-                    row["description"],
-                    row["portrait"],
                     row["role"],
                     row["subrole"],
                     row["location"],
                     row["age"],
-                    row["birthday"],
                     row["health"],
-                    row["armor"],
                     row["shields"],
+                    row["armor"],
                     row["total_hp"],
-                    row["abilities"],
-                    row["backgrounds"],
-                    row["perks_json"],
-                    row["story"],
-                    row["raw_json"],
-                    row["last_update"],
                 )
                 session.execute(prepared, params)
                 # Alimentation des tables de lecture
